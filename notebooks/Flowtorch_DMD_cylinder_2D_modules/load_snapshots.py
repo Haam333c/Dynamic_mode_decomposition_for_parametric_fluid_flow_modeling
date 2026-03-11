@@ -14,154 +14,254 @@ import numpy as np
 import torch as pt
 from pathlib import Path
 
+# load training parameter
+
+class training_snapshots:
+    """
+    Container for all training parameters μ ∈ P.
+
+    Attributes
+    ----------
+    snapshots : dict[int → ndarray]
+        Training snapshots X^(μ) for each Reynolds number μ.
+        Shape: (2 * num_points, Nt_train)
+
+    future_snapshots : dict[int → ndarray]
+        Future snapshots X_future^(μ) for each Reynolds number μ.
+        Shape: (2 * num_points, Nt_future)
+
+    times : dict[int → list[float]]
+        Training time instants T for each μ.
+
+    future_times : dict[int → list[float]]
+        Future time instants T_future for each μ.
+
+    mask : torch.Tensor or ndarray
+        Boolean mask selecting the spatial region of interest.
+
+    coords : ndarray
+        Masked spatial coordinates (num_points, 2).
+
+    num_points : int
+        Number of spatial points after masking.
+    """
+    def __init__(self):
+        self.snapshots = {}
+        self.future_snapshots = {}
+        self.times = {}
+        self.future_times = {}
+        self.mask = None
+        self.coords = None
+        self.num_points = None
+
+
+class test_snapshots:
+    """
+    Container for the test parameter μ*.
+
+    Attributes
+    ----------
+    test_future_snapshots : ndarray
+        Future snapshots X_future^(μ*) for the test parameter.
+        Shape: (2 * num_points, Nt_future)
+
+    test_future_times : list[float]
+        Future time instants T_future used for the test parameter.
+
+    mask : torch.Tensor or ndarray
+        Same spatial mask as used for training.
+
+    coords : ndarray
+        Masked spatial coordinates (num_points, 2).
+
+    num_points : int
+        Number of spatial points after masking.
+    """
+    def __init__(self):
+        self.test_future_snapshots = None
+        self.test_future_times = None
+        self.mask = None
+        self.coords = None
+        self.num_points = None
+
+
+# Load mask
+
 def load_masked_matrix(loader, mask_indices, times):
     """
-    Loads velocity snapshots for selected times and masked region (faster version).
+    Load masked velocity snapshots [Ux; Uy] for a list of time instants.
 
-    Parameters:
-    - loader: FOAMDataloader object that reads simulation data.
-    - mask_indices: Precomputed integer indices of masked points.
-    - times: List of time steps to load.
+    Parameters
+    ----------
+    loader : FOAMDataloader
+        Loader for the OpenFOAM case.
 
-    Returns:
-    - data_matrix: Array with shape (2*num_points, num_times), containing u and v velocities.
-    - num_points: Number of spatial points selected by the mask.
+    mask_indices : ndarray
+        Indices of spatial points to keep.
+
+    times : list[float]
+        Time instants to load.
+
+    Returns
+    -------
+    data_matrix : ndarray
+        Snapshot matrix of shape (2 * num_points, Nt).
+
+    num_points : int
+        Number of masked spatial points.
     """
     num_points = len(mask_indices)
     num_times = len(times)
     data_matrix = np.zeros((2 * num_points, num_times), dtype=np.float64)
 
-    for i, time in enumerate(times):
-        snapshot = loader.load_snapshot("U", time).numpy()  # shape: (n_points, 3)
-        ux_masked = snapshot[mask_indices, 0]
-        uy_masked = snapshot[mask_indices, 1]
-        data_matrix[:num_points, i] = ux_masked
-        data_matrix[num_points:, i] = uy_masked
+    for i, t in enumerate(times):
+        snapshot = loader.load_snapshot("U", t).numpy()
+        data_matrix[:num_points, i] = snapshot[mask_indices, 0]  # Ux
+        data_matrix[num_points:, i] = snapshot[mask_indices, 1]  # Uy
 
     return data_matrix, num_points
 
 
-def load_all_snapshots(Re_list, base_path, mask_box, FOAMDataloader,
-                       training_window=(10.0, 15.0), future_window=(15.0, 20.0),
-                       sampling_step=1):
-    snapshot_dict = {}
-    sampled_times_dict = {}
-    mask_dict = {}
-    num_points_dict = {}
-    loader_dict = {}
-    masked_coords_dict = {}
-    snapshot_future_dict = {}
-    sampled_times_future_dict = {}
+# load training snapshots
 
-    # Precompute mask once using the first Re (assuming same mesh for all cases)
+def load_training_snapshots(Re_list, base_path, mask_box, FOAMDataloader,
+                            training_window=(10.0, 15.0),
+                            future_window=(15.0, 20.0),
+                            sampling_step=1):
+    """
+    Load training and future snapshots for all training parameters μ ∈ P.
+
+    Parameters
+    ----------
+    Re_list : list[int]
+        List of Reynolds numbers used for training.
+
+    base_path : str
+        Base directory containing all simulation folders.
+
+    mask_box : callable
+        Function that computes a boolean mask from coordinates.
+
+    FOAMDataloader : class
+        Loader class for OpenFOAM cases.
+
+    training_window : tuple(float, float)
+        Time interval T used for training snapshots.
+
+    future_window : tuple(float, float)
+        Time interval T_future used for validation snapshots.
+
+    sampling_step : int
+        Downsampling factor for time instants.
+
+    Returns
+    -------
+    training_snapshots
+        Structured container with all training data.
+    """
+
+    data = training_snapshots()
+
+    # Compute global mask once using the first parameter
     folder0 = Path(base_path).expanduser() / f"cylinder_2D_Re{Re_list[0]}"
     loader0 = FOAMDataloader(str(folder0))
     vertices0 = loader0.vertices[:, :2]
-    global_mask = mask_box(vertices0, lower=[0.1, -1], upper=[0.75, 1])
-    mask_indices = np.where(global_mask.numpy())[0]   # precompute indices once
-    global_masked_coords = vertices0[mask_indices]
-    num_points_global = len(mask_indices)
 
+    mask = mask_box(vertices0, lower=[0.1, -1], upper=[0.75, 1])
+    mask_indices = np.where(mask.numpy())[0]
+
+    data.mask = mask
+    data.coords = vertices0[mask_indices]
+    data.num_points = len(mask_indices)
+
+    # Load snapshots for each training parameter
     for Re in Re_list:
         folder = Path(base_path).expanduser() / f"cylinder_2D_Re{Re}"
         loader = FOAMDataloader(str(folder))
         times = loader.write_times
 
-        sampled_times = [t for t in times if training_window[0] <= float(t) <= training_window[1]][::sampling_step]
+        # Training window
+        train_times = [t for t in times
+                       if training_window[0] <= float(t) <= training_window[1]][::sampling_step]
 
-        print(f"Re={Re}: Masked points = {num_points_global}")
+        # Future window
+        future_times = [t for t in times
+                        if future_window[0] <= float(t) <= future_window[1]][::sampling_step]
 
-        data_matrix, num_points = load_masked_matrix(loader, mask_indices, sampled_times)
+        # Load snapshots
+        X_train, _ = load_masked_matrix(loader, mask_indices, train_times)
+        X_future, _ = load_masked_matrix(loader, mask_indices, future_times)
 
-        snapshot_dict[Re] = data_matrix
-        sampled_times_dict[Re] = sampled_times
-        mask_dict[Re] = global_mask
-        num_points_dict[Re] = num_points
-        loader_dict[Re] = loader
-        masked_coords_dict[Re] = global_masked_coords
+        data.snapshots[Re] = X_train
+        data.future_snapshots[Re] = X_future
+        data.times[Re] = train_times
+        data.future_times[Re] = future_times
 
-        sampled_future_times = [t for t in times if future_window[0] <= float(t) <= future_window[1]][::sampling_step]
-        if sampled_future_times:
-            future_data_matrix, _ = load_masked_matrix(loader, mask_indices, sampled_future_times)
-            snapshot_future_dict[Re] = future_data_matrix
-            sampled_times_future_dict[Re] = sampled_future_times
-
-    print("All snapshots loaded.")
-    return {
-        "snapshot_dict": snapshot_dict,
-        "sampled_times_dict": sampled_times_dict,
-        "mask_dict": mask_dict,
-        "num_points_dict": num_points_dict,
-        "loader_dict": loader_dict,
-        "masked_coords_dict": masked_coords_dict,
-        "snapshot_future_dict": snapshot_future_dict,
-        "sampled_times_future_dict": sampled_times_future_dict
-    }
-
-
-
-def load_test_parameter(Re, path, mask_box, FOAMDataloader,
-                                 forecast_window=(15.0, 20.0),
-                                 sampling_step=1):
-    """
-    Loads test Reynolds number data aligned ONLY with the forecast window.
-
-    Returns:
-    - test_data: dictionary with forecast snapshots and metadata
-    """
-    loader = FOAMDataloader(path)
-    times = loader.write_times
-    vertices = loader.vertices[:, :2]
-
-    # Global mask
-    mask = mask_box(vertices, lower=[0.1, -1], upper=[0.75, 1])
-    mask_indices = np.where(mask.numpy())[0]
-    masked_coords = vertices[mask_indices]
-
-    # Forecast window only
-    sampled_times_forecast = [t for t in times
-                              if forecast_window[0] <= float(t) <= forecast_window[1]][::sampling_step]
-    snapshot_forecast, num_points = load_masked_matrix(loader, mask_indices, sampled_times_forecast)
-
-    print(f"Test Re={Re}: forecast snapshot shape = {snapshot_forecast.shape}")
-
-    return {
-        "snapshot_forecast": snapshot_forecast,
-        "sampled_times_forecast": sampled_times_forecast,
-        "mask": mask,
-        "num_points": num_points,
-        "loader": loader,
-        "masked_coords": masked_coords
-    }
-
-
-def add_test_parameter(data, Re, path, mask_box, FOAMDataloader,
-                                forecast_window=(15.0, 20.0),
-                                sampling_step=1):
-    """
-    Adds a test Reynolds number aligned ONLY with the forecast window
-    to the existing data dictionary.
-    """
-    test_data = load_test_parameter(
-        Re=Re,
-        path=path,
-        mask_box=mask_box,
-        FOAMDataloader=FOAMDataloader,
-        forecast_window=forecast_window,
-        sampling_step=sampling_step
-    )
-
-    # Store under dedicated test forecast dicts
-    if "snapshot_test_future_dict" not in data:
-        data["snapshot_test_future_dict"] = {}
-    if "sampled_times_test_future_dict" not in data:
-        data["sampled_times_test_future_dict"] = {}
-
-    data["snapshot_test_future_dict"][Re] = test_data["snapshot_forecast"]
-    data["sampled_times_test_future_dict"][Re] = test_data["sampled_times_forecast"]
-    data["mask_dict"][Re] = test_data["mask"]
-    data["num_points_dict"][Re] = test_data["num_points"]
-    data["loader_dict"][Re] = test_data["loader"]
-    data["masked_coords_dict"][Re] = test_data["masked_coords"]
+        print(f"Loaded training and future snapshots for Re={Re}")
 
     return data
+
+
+
+# Load test snapshots
+
+
+def load_test_snapshots(Re, path, mask_box, FOAMDataloader,
+                        future_times, sampling_step=1):
+    """
+    Load the test parameter μ* using the SAME future time window as training.
+
+    Parameters
+    ----------
+    Re : int
+        Test Reynolds number μ*.
+
+    path : str
+        Path to the test case folder.
+
+    mask_box : callable
+        Function that computes a boolean mask from coordinates.
+
+    FOAMDataloader : class
+        Loader class for OpenFOAM cases.
+
+    future_times : list[float]
+        Future time instants T_future used for training parameters.
+
+    sampling_step : int
+        Downsampling factor for time instants.
+
+    Returns
+    -------
+    _
+        Structured container with test future snapshots.
+    """
+
+    data = test_snapshots()
+
+    # Load case
+    loader = FOAMDataloader(path)
+    vertices = loader.vertices[:, :2]
+
+    # Compute mask (same mask_box → identical mask)
+    mask = mask_box(vertices, lower=[0.1, -1], upper=[0.75, 1])
+    mask_indices = np.where(mask.numpy())[0]
+
+    data.mask = mask
+    data.coords = vertices[mask_indices]
+    data.num_points = len(mask_indices)
+
+    # Use SAME future times as training
+    sampled_times = future_times[::sampling_step]
+
+    data.test_future_times = sampled_times
+
+    # Load masked snapshots
+    X_future, _ = load_masked_matrix(loader, mask_indices, sampled_times)
+    data.test_future_snapshots = X_future
+
+    print(f"Loaded test future snapshots for Re={Re}")
+
+    return data
+
+
