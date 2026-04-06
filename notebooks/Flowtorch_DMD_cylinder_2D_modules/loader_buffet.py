@@ -2,12 +2,14 @@
 buffet_snapshots.py
 
 Loads masked OpenFOAM fields for buffet training and test datasets.
-Supports selectable fields: U, p, cl.
+Supports ANY fields you specify in the notebook (scalar, vector, tensor) + Cl(t).
 """
 
 import numpy as np
 from pathlib import Path
 
+
+# DATA STRUCTURES
 
 class buffet_training_snapshots:
     def __init__(self):
@@ -16,11 +18,13 @@ class buffet_training_snapshots:
         self.mask = None
         self.coords = None
         self.num_points = None
-        self.mask_indices = None      
+        self.mask_indices = None
         self.cl_train = {}
         self.cl_train_times = {}
         self.cl_raw = None
         self.cl_uniform = None
+        self.field_info = None
+        self.cell_area = None  
 
 
 class buffet_test_snapshots:
@@ -33,36 +37,85 @@ class buffet_test_snapshots:
         self.cl_test_times = None
         self.cl_raw = None
         self.cl_uniform = None
+        self.field_info = None
+        self.cell_area = None  
 
 
-# Utility: masked matrix loader
-def load_masked_matrix(loader, mask_indices, times, fields=("U",)):
-    field_dims = {"U": 2, "p": 1}
-    spatial_fields = [f for f in fields if f in field_dims]
+# UNIVERSAL FIELD LOADER (scalar + vector + tensor)
+
+def load_masked_matrix(loader, mask_indices, times, fields):
+    """
+    Load the spatial fields requested in `fields`.
+    Supports scalar, vector, tensor fields.
+    Non-spatial entries like 'cl' are ignored here.
+    """
+
+    spatial_fields = [f for f in fields if f != "cl"]
+
+    field_dims = {"scalar": 1, "vector": 2, "tensor": 9}
+    field_info = []
+    total_components = 0
+
+    # infer type for each requested spatial field
+    for f in spatial_fields:
+        snap0 = None
+        for t in times:
+            try:
+                s = loader.load_snapshot(f, t)
+                if s is not None:
+                    snap0 = s.numpy()
+                    break
+            except Exception:
+                pass
+
+        if snap0 is None:
+            raise RuntimeError(f"Requested field '{f}' does not exist or cannot be loaded.")
+
+        if snap0.ndim == 1:
+            ftype = "scalar"
+        elif snap0.ndim == 2 and snap0.shape[1] == 3:
+            ftype = "vector"
+        elif snap0.ndim == 2 and snap0.shape[1] == 9:
+            ftype = "tensor"
+        else:
+            raise ValueError(f"Cannot infer field type for '{f}', shape {snap0.shape}")
+
+        dim = field_dims[ftype]
+        total_components += dim
+        field_info.append((f, ftype, dim))
 
     num_points = len(mask_indices)
     num_times = len(times)
-    total_components = sum(field_dims[f] for f in spatial_fields)
+    X = np.zeros((total_components * num_points, num_times))
 
-    data_matrix = np.zeros((total_components * num_points, num_times))
-
-    for i, t in enumerate(times):
+    # load all times
+    for ti, t in enumerate(times):
         row = 0
-        for f in spatial_fields:
+        for f, ftype, dim in field_info:
             snap = loader.load_snapshot(f, t).numpy()
 
-            if f == "U":
-                data_matrix[row:row+num_points, i] = snap[mask_indices, 0]
-                data_matrix[row+num_points:row+2*num_points, i] = snap[mask_indices, 1]
-                row += 2 * num_points
-            else:
-                data_matrix[row:row+num_points, i] = snap[mask_indices]
+            if ftype == "scalar":
+                X[row:row+num_points, ti] = snap[mask_indices]
                 row += num_points
 
-    return data_matrix, num_points
+            elif ftype == "vector":
+                X[row:row+num_points, ti] = snap[mask_indices, 0]   # Ux
+                row += num_points
+
+                X[row:row+num_points, ti] = snap[mask_indices, 2]   # Uz
+                row += num_points
+
+
+            elif ftype == "tensor":
+                for c in range(9):
+                    X[row:row+num_points, ti] = snap[mask_indices, c]
+                    row += num_points
+
+    return X, field_info
 
 
 # TRAINING LOADER
+
 def load_buffet_training_snapshots(
     param_list,
     base_path,
@@ -78,7 +131,7 @@ def load_buffet_training_snapshots(
 
     data = buffet_training_snapshots()
 
-    # Compute mask
+    # Mask from first case
     folder0 = Path(base_path).expanduser() / f"buffet_alpha{param_list[0]}deg"
     loader0 = FOAMDataloader(str(folder0))
     vertices0 = loader0.vertices[:, [0, 2]]
@@ -89,9 +142,12 @@ def load_buffet_training_snapshots(
     data.mask = mask
     data.coords = vertices0[mask_indices]
     data.num_points = len(mask_indices)
-    data.mask_indices = mask_indices      
+    data.mask_indices = mask_indices
 
-    # Loop over all training parameters
+    # Cell areas (weights)
+    data.cell_area = loader0.weights[mask_indices]
+
+    # Loop over parameters
     for alpha in param_list:
 
         folder = Path(base_path).expanduser() / f"buffet_alpha{alpha}deg"
@@ -104,11 +160,14 @@ def load_buffet_training_snapshots(
         train_times_str = list(np.array(times_str)[mask_train][::sampling_step])
         train_times_float = list(times_float[mask_train][::sampling_step])
 
-        X_train, _ = load_masked_matrix(loader, mask_indices, train_times_str, fields)
+        # Load spatial fields only
+        X_train, field_info = load_masked_matrix(loader, mask_indices, train_times_str, fields)
 
         data.snapshots[alpha] = X_train
         data.times[alpha] = train_times_float
+        data.field_info = field_info
 
+        # Load Cl if requested
         if "cl" in fields:
             coeffs = load_force_coeffs_fn(folder)
             t_cl_raw = coeffs["t"].values
@@ -123,17 +182,16 @@ def load_buffet_training_snapshots(
 
             data.cl_train[alpha] = cl_train
             data.cl_train_times[alpha] = train_times_float
-
-        
             data.cl_raw = (t_cl_raw, cl_raw)
             data.cl_uniform = (t_cl_uni, cl_uni)
 
         print(f"Loaded training snapshots for α={alpha}° {X_train.shape}")
 
-    return data
+    return data, loader0
 
 
 # TEST LOADER
+
 def load_buffet_test_snapshots(
     param,
     base_path,
@@ -156,16 +214,20 @@ def load_buffet_test_snapshots(
     data.coords = coords
     data.num_points = num_points
 
+    # Cell areas (weights)
+    data.cell_area = loader.weights[mask_indices]
+
     # Match times
     times_str = loader.write_times
     test_times_str = [t for t in times_str if float(t) in train_times]
 
-    # Load masked fields
-    X_test, _ = load_masked_matrix(loader, mask_indices, test_times_str, fields)
+    # Load spatial fields only
+    X_test, field_info = load_masked_matrix(loader, mask_indices, test_times_str, fields)
     data.snapshots = X_test
     data.times = train_times
+    data.field_info = field_info
 
-    # Load Cl
+    # Load Cl if requested
     if "cl" in fields:
         coeffs = load_force_coeffs_fn(folder)
         t_cl_raw = coeffs["t"].values
@@ -180,11 +242,10 @@ def load_buffet_test_snapshots(
 
         data.cl_test = cl_test
         data.cl_test_times = train_times
-
-    
         data.cl_raw = (t_cl_raw, cl_raw)
         data.cl_uniform = (t_cl_uni, cl_uni)
 
     print(f"Loaded test snapshots for α={param}° {X_test.shape}")
 
-    return data
+    return data, loader
+
