@@ -3,12 +3,13 @@ import numpy as np
 class lagrange_interp:
     """
     Interpolate aligned DMD modes, eigenvalues, and initial conditions
-    across a parameter domain.
+    across a parameter domain. 
     """
 
     def __init__(self, parameter_list, parameter_test,
                  aligned_modes, aligned_eigs, x_0,
-                 stencil_sizes=[2, 4, 6]):
+                 stencil_sizes=[2, 4, 6],
+                 interp_x0=True):
 
         self.parameter_list = sorted(parameter_list)
         self.parameter_test = parameter_test
@@ -24,9 +25,10 @@ class lagrange_interp:
         self.interp_eigs   = {}
         self.interp_x_0    = {}
 
-        self._basis_weights = {}     # L_i(parameter_test)
-        self._basis_polys   = {}     # L_i(mu) as poly1d
+        self._basis_weights = {}        
+        self._basis_polys   = {}        
 
+        self.interp_x0_flag = interp_x0
         self._fitted = False
 
     def _build_stencils(self):
@@ -107,7 +109,6 @@ class lagrange_interp:
         return s_interp
 
     def _interp_x_0(self, pts):
-        
         values = [self.x_0_train[Re] for Re in pts]
         return self._lagrange(self.parameter_test, pts, values)
 
@@ -117,7 +118,11 @@ class lagrange_interp:
         for Np, pts in self.stencils.items():
             self.interp_modes[Np] = self._interp_modes(pts)
             self.interp_eigs[Np]  = self._interp_eigs(pts)
-            self.interp_x_0[Np]   = self._interp_x_0(pts)
+
+            if self.interp_x0_flag:
+                self.interp_x_0[Np] = self._interp_x_0(pts)
+            else:
+                self.interp_x_0[Np] = None
 
             self._basis_weights[Np] = self._lagrange_basis(self.parameter_test, pts)
             self._basis_polys[Np]   = self._lagrange_polynomials(pts)
