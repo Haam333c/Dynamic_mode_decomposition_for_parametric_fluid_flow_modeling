@@ -76,7 +76,7 @@ def load_cl(path):
     """
     forces_file = Path(path) / "postProcessing/forces/0/coefficient.dat"
     data = np.loadtxt(forces_file, comments="#")
-    return data[:, 0], data[:, 2]
+    return data[:, 0], data[:, 4]
 
 
 def load_training_snapshots(Re_list, base_path, mask_box, FOAMDataloader,
