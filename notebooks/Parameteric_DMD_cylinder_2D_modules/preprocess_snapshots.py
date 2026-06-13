@@ -2,8 +2,7 @@ import numpy as np
 
 def preprocess_snapshots(snapshot_dict, Re_list):
     """
-    Preprocess velocity snapshots by subtracting the global training mean flow only.
-    No normalization is applied.
+    Preprocess velocity snapshots by subtracting the global training mean flow.
 
     Steps:
     1. Stack all training snapshots across Reynolds numbers and time.
@@ -11,15 +10,13 @@ def preprocess_snapshots(snapshot_dict, Re_list):
     3. Subtract this mean flow from each training snapshot block.
     4. Stack the mean-subtracted training snapshots into a 3D array.
 
-    Parameters
-    ----------
+    Parameters:
     snapshot_dict : dict
         Raw velocity snapshots per Reynolds number (training).
     Re_list : list
         Reynolds numbers used for training.
 
-    Returns
-    -------
+    Returns:
     train_snapshots : ndarray
         Array of shape (n_Re, space_dim, n_time) with mean-subtracted training snapshots.
     mean_flow_train : ndarray
