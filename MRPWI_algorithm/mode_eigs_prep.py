@@ -1,5 +1,21 @@
 import numpy as np
 
+"""
+Interpolation-based parametric reduced-order models with dynamic mode decomposition.
+
+This module implements the preprocessing stage required for PROM construction
+based on the methodology of Du et al. (2024), including mode ranking,
+conjugate‑pair handling, and phase realignment of complex DMD modes across
+a parameter domain.
+
+Reference:
+L. Du, S. Zhang, R. Zhang, S. Zhang,
+"Interpolation-based parametric reduced-order models with dynamic mode decomposition",
+Eastern Institute for Advanced Study, Eastern Institute of Technology, Ningbo, China;
+Ningbo Institute of Digital Twin, Eastern Institute of Technology, Ningbo, China;
+School of Ocean and Civil Engineering, Shanghai Jiao Tong University, China.
+"""
+
 class mode_eigs_prep:
     """
     Preprocess DMD modes and eigenvalues across a parameter domain.
@@ -21,10 +37,8 @@ class mode_eigs_prep:
     3. Phase alignment
        - Aligns the complex phase of each mode to a reference parameter
          (closest to parameter_test)
-
-    This class does NOT perform interpolation.
     """
-
+    
     def __init__(self, parameter_list, parameter_test, modes_dict, eigs_dict, rank):
 
         self.parameter_list = sorted(parameter_list)
