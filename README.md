@@ -54,7 +54,7 @@ Utilities for loading CFD data:
 ## Test Cases
 Example CFD setups and data structures used for:
 
-- Cylinder flow 
+- 2D-Cylinder flow 
 - Transonic buffet flow  
 
 These cases allow users to reproduce the results shown in the notebooks.
