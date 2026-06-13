@@ -127,9 +127,4 @@ The workflow is designed to be:
 
 ---
 
-## License
-
-MIT License.
-
----
 
