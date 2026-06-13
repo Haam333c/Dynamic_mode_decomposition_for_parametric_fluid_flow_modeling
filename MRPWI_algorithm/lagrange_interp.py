@@ -1,5 +1,25 @@
 import numpy as np
 
+"""
+Mode‑Realigned Pointwise Interpolation (MRPWI)
+
+MRPWI constructs parametric reduced‑order models by interpolating complex,
+non‑orthonormal DMD modes after enforcing a consistent spectral structure
+across the parameter domain. The method operates on modes that have already
+been ranked, conjugate‑paired, and phase‑aligned, ensuring that each modal
+degree of freedom corresponds across all training parameters.
+
+For a target parameter value, each mode is interpolated pointwise in the
+physical domain using Lagrange basis functions, while the eigenvalues are
+interpolated independently.
+
+Reference:
+L. Du, S. Zhang, R. Zhang, S. Zhang,
+"Interpolation-based parametric reduced-order models with dynamic mode decomposition",
+Eastern Institute for Advanced Study / Shanghai Jiao Tong University.
+"""
+
+
 class lagrange_interp:
     """
     Interpolate aligned DMD modes, eigenvalues, and initial conditions
