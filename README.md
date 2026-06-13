@@ -10,7 +10,7 @@ It provides a complete, reproducible workflow for constructing **parametric redu
 - Spectrally consistent preprocessing of DMD modes  
 - **Mode‑Realigned Pointwise Interpolation (MRPWI)**  
 - Lagrange interpolation of eigenvalues  
-- Interpolation of initial conditions \(x_0\)  
+- Interpolation of initial conditions ($x_0$)  
 - Evaluation against **PyDMD’s ParametricDMD** implementation  
 
 The repository includes tools for both **laminar cylinder flow** and **transonic shock buffet** analysis.
