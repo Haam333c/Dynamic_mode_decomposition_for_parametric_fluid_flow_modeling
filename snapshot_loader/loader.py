@@ -1,7 +1,7 @@
 """
 load_snapshots.py
 
-Loads masked OpenFOAM fields for training and test datasets.
+Loads masked OpenFOAM fields for the 2D cylinder training and test datasets.
 Supports selectable fields: U, p, omega, cl.
 """
 
