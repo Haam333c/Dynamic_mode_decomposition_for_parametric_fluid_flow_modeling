@@ -83,7 +83,19 @@ Your implementation includes:
 
 ## Dependencies
 
-- FlowTorch  
+- PyDMD ParametricDMD 
+  - References:  
+    Demo, N., Tezzele, M., & Rozza, G. (2018). *PyDMD: Python Dynamic Mode Decomposition.*  
+    Journal of Open Source Software, 3(22), 530.  
+    DOI: https://doi.org/10.21105/joss.00530  
+
+    Ichinaga, D., Andreuzzi, F., Demo, N., Tezzele, M., Lapo, E., Rozza, G., Brunton, S. L., & Kutz, J. N. (2024).  
+    *PyDMD: A Python Package for Robust Dynamic Mode Decomposition.*  
+    Journal of Machine Learning Research.  
+    DOI: https://www.jmlr.org/papers/v25/23-0872.html  
+    arXiv: https://arxiv.org/abs/2307.07862
+
+- FlowTorch DMD 
   - Reference:  
     Weiner, A., & Semaan, R. (2021). *flowTorch – a Python library for analysis and reduced‑order modeling of fluid flows*.  
     Journal of Open Source Software, 6(68), 3860.  
@@ -97,18 +109,6 @@ Your implementation includes:
 - Transonic buffet case  
   - Based on the open‑source buffet setup:  
     https://github.com/JanisGeise/buffet_oat15
-
-- PyDMD  
-  - References:  
-    Demo, N., Tezzele, M., & Rozza, G. (2018). *PyDMD: Python Dynamic Mode Decomposition.*  
-    Journal of Open Source Software, 3(22), 530.  
-    DOI: https://doi.org/10.21105/joss.00530  
-
-    Ichinaga, D., Andreuzzi, F., Demo, N., Tezzele, M., Lapo, E., Rozza, G., Brunton, S. L., & Kutz, J. N. (2024).  
-    *PyDMD: A Python Package for Robust Dynamic Mode Decomposition.*  
-    Journal of Machine Learning Research.  
-    DOI: https://www.jmlr.org/papers/v25/23-0872.html  
-    arXiv: https://arxiv.org/abs/2307.07862
 
 - NumPy, SciPy, scikit‑learn  
 - Matplotlib, Seaborn  
