@@ -69,11 +69,11 @@ This work builds on and extends the interpolation methodology introduced in:
 *Interpolation‑based parametric reduced‑order models with dynamic mode decomposition*  
 Eastern Institute for Advanced Study / Shanghai Jiao Tong University (2024)
 
-Your implementation includes:
+The implementation includes:
 
-- FlowTorch‑style mode ranking  
+- FlowTorch's integral contribution based mode ranking  
 - Conjugate‑pair reordering  
-- Phase alignment across parameters  
+- Phase alignment of modes across parameters  
 - **MRPWI** for pointwise interpolation of complex DMD modes  
 - Lagrange interpolation of eigenvalues  
 - **Interpolation of initial conditions** (extension beyond the original paper)  
