@@ -12,7 +12,7 @@ correspondence across all training parameters.
 For a target parameter value, each DMD mode is interpolated pointwise in the
 physical domain using Lagrange basis functions, while the associated DMD
 eigenvalues are interpolated independently. In this implementation, the
-initial condition vector x₀ can also interpolated using the same Lagrange
+initial condition vector x₀ can also be interpolated using the same Lagrange
 polynomial basis.
 
 Reference:
